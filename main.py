@@ -39,7 +39,7 @@ def get_user_transactions(user_id):
 
 def run_sql(query):
 
-    conn = sqlite3.connect("transactions.db")
+    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
     cursor = conn.cursor()
 
     cursor.execute(query)
@@ -133,4 +133,5 @@ SQL result:
         "sql_used": sql_query
 
     }
+
 
