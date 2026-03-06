@@ -77,20 +77,25 @@ def chat(payload: dict):
 
     # Step 1: Ask GPT to generate SQL
     sql_prompt = f"""
-You are a data analyst.
+You are a PostgreSQL data analyst.
 
-Generate a SQL query to answer the user's question.
+Database schema:
 
-Database table name: transactions
+Table: transactions
 
 Columns:
-user_id
-payer
-amount
-currency
-created_at
+- user_id INTEGER
+- payer TEXT
+- amount FLOAT
+- currency TEXT
+- created_at TIMESTAMP
 
-Only generate the SQL query.
+Rules:
+- Always filter by user_id = {user_id}
+- Only use the transactions table
+- Use valid PostgreSQL syntax
+- Do not include explanations
+- Return ONLY the SQL query
 
 User question:
 {question}
@@ -133,5 +138,6 @@ SQL result:
         "sql_used": sql_query
 
     }
+
 
 
