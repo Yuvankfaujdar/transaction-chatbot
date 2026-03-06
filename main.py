@@ -1,6 +1,7 @@
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI
 import sqlite3
+import os
 from openai import OpenAI
 
 app = FastAPI()
@@ -14,7 +15,7 @@ app.add_middleware(
 )
 
 # Add your OpenAI API key here
-client = OpenAI(api_key="sk-proj-n0YhtxT1Fl3WP_chWMDiqLVJ7_RaWOcQm7Nvt8YBB9TTz2igopZ0gPZy_vX21Ol99Sczdvczvczxv_qBx8yQT3BlbkFJqpkZhjAEdb9TaYFiRDLYFVHPX0vA0vpN-fAI0BRdvfXyFisBrFLVOIRVLWqEvcWn3FnbrdIT4A")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 # Function to fetch transactions for a user
@@ -129,4 +130,5 @@ SQL result:
     return {
         "answer": answer.choices[0].message.content,
         "sql_used": sql_query
+
     }
