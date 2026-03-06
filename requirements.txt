@@ -2,3 +2,4 @@ fastapi
 uvicorn
 openai
 pandas
+psycopg2-binary
