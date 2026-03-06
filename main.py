@@ -1,6 +1,7 @@
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI
 import sqlite3
+import psycopg2
 import os
 from openai import OpenAI
 
@@ -21,13 +22,13 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 # Function to fetch transactions for a user
 def get_user_transactions(user_id):
 
-    conn = sqlite3.connect("transactions.db")
+    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
     cursor = conn.cursor()
 
     cursor.execute("""
     SELECT payer, amount, currency, created_at
     FROM transactions
-    WHERE user_id = ?
+    WHERE user_id = %s
     """, (user_id,))
 
     rows = cursor.fetchall()
@@ -132,3 +133,4 @@ SQL result:
         "sql_used": sql_query
 
     }
+
