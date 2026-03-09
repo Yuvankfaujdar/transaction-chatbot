@@ -1,0 +1,164 @@
+{
+  "schema_version": "2.0",
+  "database_description": "Payment transaction ledger for India-based recipients receiving international payments. Senders pay in GBP, EUR, or USD. The platform converts the full amount to INR, deducts a fee in INR, and pays out the remainder in INR. Each payment creates exactly 3 rows (legs) linked by transaction_group_id.",
+  "default_filters": {
+    "always_filter_by_user_id": "Every query must include WHERE user_id = <user_id>.",
+    "for_received_amount": "Use transaction_type = 'INVOICED_PAYOUT' and posting_amount (INR) to get net amount received.",
+    "for_sender_currency_analysis": "Use transaction_type = 'INVOICED_PAYMENT' and transaction_currency + transaction_amount for what the sender paid.",
+    "for_fees": "Use transaction_type = 'PAYOUT_FEE' and posting_amount (INR) for fees paid.",
+    "never_mix_legs": "Never SUM posting_amount across all three legs \u2014 this triples the real value. Always filter by a specific transaction_type.",
+    "default_time_window": "If no time range specified, default to last 90 days using created_at."
+  },
+  "fx_context": {
+    "description": "The platform converts sender currency to INR at time of transaction. Approximate rates for context only \u2014 do not use for calculations, use posting_amount instead.",
+    "approximate_rates": {
+      "GBP_to_INR": 107.5,
+      "EUR_to_INR": 91.2,
+      "USD_to_INR": 83.8
+    },
+    "fee": "1.5% of the gross INR amount, deducted before payout"
+  },
+  "tables": [
+    {
+      "name": "transactions",
+      "description": "Each real-world payment creates 3 rows all sharing the same transaction_group_id. INVOICED_PAYMENT = gross in sender currency. INVOICED_PAYOUT = net deposited to user in INR. PAYOUT_FEE = platform fee in INR.",
+      "columns": [
+        {
+          "name": "transaction_group_id",
+          "type": "TEXT",
+          "description": "Links all 3 legs of one payment. Use to JOIN or identify a complete transaction.",
+          "example": "TXG3A9F1B20C4"
+        },
+        {
+          "name": "user_id",
+          "type": "TEXT",
+          "description": "The India-based account holder receiving the payment. Always filter by this.",
+          "example": "CU231213125929"
+        },
+        {
+          "name": "full_name",
+          "type": "TEXT",
+          "description": "Full name of the account holder (the recipient/user, NOT the sender).",
+          "example": "Girish Haridas Bhattad"
+        },
+        {
+          "name": "transaction_type",
+          "type": "TEXT",
+          "description": "Which leg of the payment this row represents.",
+          "values": {
+            "INVOICED_PAYMENT": "Gross amount received from the sender in their currency. posting_currency = sender currency.",
+            "INVOICED_PAYOUT": "Net INR amount deposited to the user after fee deduction. posting_currency = INR. Use this for 'how much did I receive' questions.",
+            "PAYOUT_FEE": "Platform fee charged in INR. posting_currency = INR. Use this for 'how much did I pay in fees' questions."
+          }
+        },
+        {
+          "name": "transaction_amount",
+          "type": "FLOAT",
+          "description": "Amount in the original sender currency (transaction_currency). Same value across all 3 legs of a group. Do NOT use this for INR totals.",
+          "example": 1250.0
+        },
+        {
+          "name": "transaction_currency",
+          "type": "TEXT",
+          "description": "ISO 4217 code of the sender's currency. Use this to answer 'which currency do I receive most in'. Values: GBP, EUR, USD.",
+          "values": [
+            "GBP",
+            "EUR",
+            "USD"
+          ]
+        },
+        {
+          "name": "posting_amount",
+          "type": "FLOAT",
+          "description": "The settled amount in posting_currency. For INVOICED_PAYMENT this is in sender currency. For INVOICED_PAYOUT and PAYOUT_FEE this is in INR.",
+          "example": 134375.0
+        },
+        {
+          "name": "posting_currency",
+          "type": "TEXT",
+          "description": "Currency of posting_amount. For INVOICED_PAYMENT = sender currency (GBP/EUR/USD). For INVOICED_PAYOUT and PAYOUT_FEE = INR always.",
+          "values": [
+            "GBP",
+            "EUR",
+            "USD",
+            "INR"
+          ]
+        },
+        {
+          "name": "sender_name",
+          "type": "TEXT",
+          "description": "Name of the person or company who sent the payment from abroad. Use for 'who pays me most' questions. One sender can have many transactions.",
+          "example": "James Thornton"
+        },
+        {
+          "name": "customer_reference",
+          "type": "TEXT",
+          "description": "Internal customer reference code. Not the same as user_id.",
+          "example": "CR2509107777"
+        },
+        {
+          "name": "transaction_source",
+          "type": "TEXT",
+          "description": "How the transaction was initiated. Currently always PAYMENT_REQUEST.",
+          "values": [
+            "PAYMENT_REQUEST"
+          ]
+        },
+        {
+          "name": "transaction_status",
+          "type": "TEXT",
+          "description": "Current status of the transaction. Currently always COMPLETED.",
+          "values": [
+            "COMPLETED"
+          ]
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "description": "When the transaction was created. Use DATE_TRUNC('month', created_at) to group by month. Default to last 90 days if no range specified.",
+          "example": "2026-01-27 07:39:00"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP",
+          "description": "When the transaction record was last updated. Usually a few minutes after created_at.",
+          "example": "2026-01-27 07:44:00"
+        }
+      ],
+      "common_questions": [
+        {
+          "question": "Who pays me the most by total INR value?",
+          "sql_pattern": "SELECT sender_name, SUM(posting_amount) AS total_inr FROM transactions WHERE user_id = ? AND transaction_type = 'INVOICED_PAYOUT' GROUP BY sender_name ORDER BY total_inr DESC LIMIT 10"
+        },
+        {
+          "question": "Who sends me the highest number of transactions?",
+          "sql_pattern": "SELECT sender_name, COUNT(*) AS num_transactions FROM transactions WHERE user_id = ? AND transaction_type = 'INVOICED_PAYOUT' GROUP BY sender_name ORDER BY num_transactions DESC LIMIT 10"
+        },
+        {
+          "question": "Which currency do I receive most payments in?",
+          "sql_pattern": "SELECT transaction_currency, COUNT(*) AS count, SUM(transaction_amount) AS total_sender_amount FROM transactions WHERE user_id = ? AND transaction_type = 'INVOICED_PAYMENT' GROUP BY transaction_currency ORDER BY count DESC"
+        },
+        {
+          "question": "How much have I received in total in INR?",
+          "sql_pattern": "SELECT SUM(posting_amount) AS total_inr FROM transactions WHERE user_id = ? AND transaction_type = 'INVOICED_PAYOUT'"
+        },
+        {
+          "question": "How much did I receive this month in INR?",
+          "sql_pattern": "SELECT SUM(posting_amount) AS total_inr FROM transactions WHERE user_id = ? AND transaction_type = 'INVOICED_PAYOUT' AND DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE)"
+        },
+        {
+          "question": "How much did I pay in fees?",
+          "sql_pattern": "SELECT SUM(posting_amount) AS total_fees_inr FROM transactions WHERE user_id = ? AND transaction_type = 'PAYOUT_FEE'"
+        },
+        {
+          "question": "Show my monthly received amounts in INR",
+          "sql_pattern": "SELECT DATE_TRUNC('month', created_at) AS month, SUM(posting_amount) AS total_inr FROM transactions WHERE user_id = ? AND transaction_type = 'INVOICED_PAYOUT' GROUP BY month ORDER BY month DESC"
+        },
+        {
+          "question": "What is the highest single payment I received?",
+          "sql_pattern": "SELECT sender_name, transaction_amount, transaction_currency, posting_amount, created_at FROM transactions WHERE user_id = ? AND transaction_type = 'INVOICED_PAYOUT' ORDER BY posting_amount DESC LIMIT 1"
+        }
+      ]
+    }
+  ]
+}
